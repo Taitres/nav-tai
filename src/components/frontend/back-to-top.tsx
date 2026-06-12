@@ -24,18 +24,24 @@ export function BackToTop() {
     <AnimatePresence>
       {show && (
         <motion.div
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.8 }}
+          initial={{ opacity: 0, scale: 0.5, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.5, y: 20 }}
+          transition={{ type: "spring", stiffness: 300, damping: 25 }}
           className="fixed right-6 bottom-6 z-40"
         >
           <Button
             variant="outline"
             size="icon-lg"
             onClick={scrollToTop}
-            className="rounded-full shadow-lg backdrop-blur-sm"
+            className="rounded-full shadow-lg shadow-black/10 backdrop-blur-xl bg-background/80 border-border/50 hover:bg-primary hover:text-primary-foreground hover:border-primary transition-all duration-300"
           >
-            <ArrowUp className="size-4" />
+            <motion.div
+              whileHover={{ y: -2 }}
+              transition={{ type: "spring", stiffness: 400, damping: 20 }}
+            >
+              <ArrowUp className="size-4" />
+            </motion.div>
           </Button>
         </motion.div>
       )}

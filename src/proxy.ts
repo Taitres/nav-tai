@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
 import { decrypt } from "@/lib/auth"
 
-const protectedRoutes = ["/admin"]
-const publicRoutes = ["/", "/login"]
+const protectedRoutes = ["/settings", "/share"]
+const authRoutes = ["/login", "/register"]
 
 export async function proxy(req: NextRequest) {
   const path = req.nextUrl.pathname
   const isProtectedRoute = protectedRoutes.some((r) => path.startsWith(r))
-  const isPublicRoute = publicRoutes.some((r) => path === r)
+  const isAuthRoute = authRoutes.some((r) => path === r)
 
   const cookie = req.cookies.get("session")?.value
   const session = await decrypt(cookie)
@@ -16,8 +16,8 @@ export async function proxy(req: NextRequest) {
     return NextResponse.redirect(new URL("/login", req.nextUrl))
   }
 
-  if (isPublicRoute && session?.userId && path === "/login") {
-    return NextResponse.redirect(new URL("/admin", req.nextUrl))
+  if (isAuthRoute && session?.userId) {
+    return NextResponse.redirect(new URL("/", req.nextUrl))
   }
 
   return NextResponse.next()

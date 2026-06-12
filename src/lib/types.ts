@@ -1,5 +1,16 @@
+export interface User {
+  id: string
+  email: string
+  name: string
+  role: "admin" | "user"
+  avatar: string
+  shareCode: string
+  createdAt: string
+}
+
 export interface Category {
   id: string
+  userId: string
   name: string
   slug: string
   icon: string
@@ -10,6 +21,7 @@ export interface Category {
 
 export interface Site {
   id: string
+  userId: string
   categoryId: string
   name: string
   url: string
@@ -22,10 +34,13 @@ export interface Site {
 
 export interface SearchEngine {
   id: string
+  userId: string
   name: string
   icon: string
   urlTemplate: string
+  isDefault: boolean
   enabled: boolean
+  order: number
 }
 
 export interface AiSearchConfig {
@@ -36,19 +51,26 @@ export interface AiSearchConfig {
   promptTemplate: string
 }
 
-export interface Settings {
+export interface UserSettings {
   siteName: string
   siteDescription: string
   heroTitle: string
   heroSubtitle: string
-  searchEngines: SearchEngine[]
-  aiSearch: AiSearchConfig | null
+  defaultEngineId: string | null
 }
 
-export interface NavData {
-  categories: Category[]
-  sites: Site[]
-  settings: Settings
+export interface SharedCollection {
+  id: string
+  shareCode: string
+  userId: string
+  name: string
+  data: SharedCollectionData
+  createdAt: string
+}
+
+export interface SharedCollectionData {
+  categories: Omit<Category, "userId">[]
+  sites: Omit<Site, "userId">[]
 }
 
 export interface SessionPayload {

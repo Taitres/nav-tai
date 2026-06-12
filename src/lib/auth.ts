@@ -1,9 +1,11 @@
 import "server-only"
 import { SignJWT, jwtVerify } from "jose"
 import { cookies } from "next/headers"
+import bcrypt from "bcryptjs"
 import type { SessionPayload } from "./types"
+import { getUserById, getUserByEmail } from "./db"
 
-const secretKey = process.env.SESSION_SECRET
+const secretKey = process.env.SESSION_SECRET || "nav-tai-default-secret-change-me"
 const encodedKey = new TextEncoder().encode(secretKey)
 
 export async function encrypt(payload: SessionPayload): Promise<string> {
@@ -26,9 +28,9 @@ export async function decrypt(session: string | undefined): Promise<SessionPaylo
   }
 }
 
-export async function createSession(): Promise<void> {
+export async function createSession(userId: string): Promise<void> {
   const expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000
-  const session = await encrypt({ userId: "admin", expiresAt })
+  const session = await encrypt({ userId, expiresAt })
   const cookieStore = await cookies()
   cookieStore.set("session", session, {
     httpOnly: true,
@@ -44,12 +46,13 @@ export async function verifySession(): Promise<SessionPayload | null> {
   const session = cookieStore.get("session")?.value
   const payload = await decrypt(session)
 
-  if (!session || !payload) {
-    return null
-  }
+  if (!session || !payload) return null
+
+  const user = getUserById(payload.userId)
+  if (!user) return null
 
   if (payload.expiresAt - Date.now() < 7 * 24 * 60 * 60 * 1000) {
-    await createSession()
+    await createSession(payload.userId)
   }
 
   return payload
@@ -60,7 +63,13 @@ export async function deleteSession(): Promise<void> {
   cookieStore.delete("session")
 }
 
-export function verifyPassword(password: string): boolean {
-  const adminPassword = process.env.ADMIN_PASSWORD || "admin123"
-  return password === adminPassword
+export async function verifyCredentials(email: string, password: string): Promise<string | null> {
+  const user = getUserByEmail(email)
+  if (!user) return null
+  const valid = await bcrypt.compare(password, user.passwordHash)
+  return valid ? user.id : null
+}
+
+export async function hashPassword(password: string): Promise<string> {
+  return bcrypt.hash(password, 10)
 }
