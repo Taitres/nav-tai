@@ -6,8 +6,7 @@ import { ExternalLink, Pencil, Trash2, Check, X as XIcon } from "lucide-react"
 import { FaviconImg } from "@/components/shared/favicon-img"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import type { Site, Category } from "@/lib/types"
+import type { Site } from "@/lib/types"
 
 type CardSize = "sm" | "md" | "lg"
 
@@ -17,7 +16,6 @@ interface SiteCardProps {
   editMode?: boolean
   onDelete?: () => void
   onUpdate?: (updates: Partial<Site>) => void
-  allCategories?: Category[]
   cardSize?: CardSize
 }
 
@@ -27,7 +25,7 @@ const sizeConfig: Record<CardSize, { padding: string; iconSize: string; titleSiz
   lg: { padding: "p-5", iconSize: "size-10", titleSize: "text-base", descLines: 3, showTags: true, showDesc: true },
 }
 
-export function SiteCard({ site, index = 0, editMode, onDelete, onUpdate, allCategories, cardSize = "md" }: SiteCardProps) {
+export function SiteCard({ site, index = 0, editMode, onDelete, onUpdate, cardSize = "md" }: SiteCardProps) {
   const cardRef = useRef<HTMLAnchorElement>(null)
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 })
   const [isHovered, setIsHovered] = useState(false)
@@ -37,7 +35,6 @@ export function SiteCard({ site, index = 0, editMode, onDelete, onUpdate, allCat
     url: site.url,
     description: site.description,
     tags: site.tags.join(", "),
-    categoryId: site.categoryId,
   })
 
   const cfg = sizeConfig[cardSize]
@@ -57,7 +54,6 @@ export function SiteCard({ site, index = 0, editMode, onDelete, onUpdate, allCat
       url: editData.url,
       description: editData.description,
       tags: editData.tags.split(",").map((t) => t.trim()).filter(Boolean),
-      categoryId: editData.categoryId,
     }
     onUpdate?.(updates)
     setIsEditing(false)
@@ -75,18 +71,6 @@ export function SiteCard({ site, index = 0, editMode, onDelete, onUpdate, allCat
           <Input value={editData.name} onChange={(e) => setEditData({ ...editData, name: e.target.value })} className="h-7 text-sm font-medium" placeholder="网站名称" />
           <Input value={editData.url} onChange={(e) => setEditData({ ...editData, url: e.target.value })} className="h-7 text-xs" placeholder="https://..." />
           <Input value={editData.description} onChange={(e) => setEditData({ ...editData, description: e.target.value })} className="h-7 text-xs" placeholder="描述" />
-          {allCategories && allCategories.length > 1 && (
-            <Select value={editData.categoryId} onValueChange={(v) => v && setEditData({ ...editData, categoryId: v })}>
-              <SelectTrigger className="h-7 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {allCategories.map((cat) => (
-                  <SelectItem key={cat.id} value={cat.id}>{cat.icon} {cat.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
           <Input value={editData.tags} onChange={(e) => setEditData({ ...editData, tags: e.target.value })} className="h-7 text-xs" placeholder="标签（逗号分隔）" />
         </div>
         <div className="flex items-center gap-2 justify-end">

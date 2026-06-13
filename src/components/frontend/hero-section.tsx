@@ -12,7 +12,7 @@ export function HeroSection({ title, subtitle }: HeroSectionProps) {
   const containerRef = useRef<HTMLDivElement>(null)
 
   return (
-    <div ref={containerRef} className="relative overflow-hidden pb-8 pt-16 md:pb-12 md:pt-24">
+    <div ref={containerRef} className="relative overflow-hidden pb-4 pt-12 md:pb-6 md:pt-16">
       <div className="absolute inset-0 -z-10">
         <motion.div
           animate={{

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { motion, AnimatePresence } from "motion/react"
 import { Pencil, Trash2, Plus, Check, X as XIcon, GripVertical } from "lucide-react"
 import { SiteCard } from "./site-card"
@@ -9,21 +9,11 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
-import {
-  DndContext,
-  closestCenter,
-  PointerSensor,
-  KeyboardSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from "@dnd-kit/core"
+import { useDroppable } from "@dnd-kit/core"
 import {
   SortableContext,
   useSortable,
-  arrayMove,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
+  rectSortingStrategy,
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import type { Category, Site } from "@/lib/types"
@@ -41,36 +31,37 @@ interface CategorySectionProps {
   onCategoryChange?: (updated: Category) => void
   onCategoryDelete?: (id: string) => void
   onSitesChange?: (sites: Site[]) => void
-  allCategories?: Category[]
+  onDropSite?: (e: React.DragEvent, categoryId: string) => void
+  onDragOverSite?: (e: React.DragEvent) => void
 }
 
-function SortableSiteCard({ site, index, editMode, onDelete, onUpdate, allCategories, cardSize }: {
+function SortableSiteCard({ site, index, editMode, onDelete, onUpdate, cardSize }: {
   site: Site
   index: number
   editMode?: boolean
   onDelete?: () => void
   onUpdate?: (updates: Partial<Site>) => void
-  allCategories?: Category[]
   cardSize?: CardSize
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: site.id })
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: `site:${site.id}` })
 
   return (
     <div
       ref={setNodeRef}
       style={{
         transform: CSS.Transform.toString(transform),
-        transition,
-        opacity: isDragging ? 0.5 : 1,
+        transition: transition || "transform 180ms cubic-bezier(0.16, 1, 0.3, 1)",
+        opacity: isDragging ? 0.72 : 1,
         zIndex: isDragging ? 50 : undefined,
       }}
+      className="will-change-transform"
     >
       {editMode && (
         <div className="relative">
           <button
             {...attributes}
             {...listeners}
-            className="absolute -left-1 -top-1 z-20 flex size-6 items-center justify-center rounded-full bg-muted text-muted-foreground hover:bg-accent hover:text-foreground cursor-grab active:cursor-grabbing shadow-sm"
+            className="absolute -left-1 -top-1 z-20 flex size-6 touch-none items-center justify-center rounded-full border bg-background/90 text-muted-foreground shadow-sm backdrop-blur-md transition-colors hover:bg-accent hover:text-foreground cursor-grab active:cursor-grabbing"
           >
             <GripVertical className="size-3.5" />
           </button>
@@ -82,7 +73,6 @@ function SortableSiteCard({ site, index, editMode, onDelete, onUpdate, allCatego
         editMode={editMode}
         onDelete={onDelete}
         onUpdate={onUpdate}
-        allCategories={allCategories}
         cardSize={cardSize}
       />
     </div>
@@ -101,7 +91,7 @@ const gapMap: Record<LayoutDensity, string> = {
   relaxed: "gap-4",
 }
 
-export function CategorySection({ category, sites: initialSites, categoryIndex = 0, editMode, cardSize = "md", layoutDensity = "normal", onCategoryChange, onCategoryDelete, onSitesChange, allCategories }: CategorySectionProps) {
+export function CategorySection({ category, sites: initialSites, categoryIndex = 0, editMode, cardSize = "md", layoutDensity = "normal", onCategoryChange, onCategoryDelete, onSitesChange, onDropSite, onDragOverSite }: CategorySectionProps) {
   const [sites, setSites] = useState(initialSites)
   const [isEditing, setIsEditing] = useState(false)
   const [editName, setEditName] = useState(category.name)
@@ -110,34 +100,13 @@ export function CategorySection({ category, sites: initialSites, categoryIndex =
   const [showAddSite, setShowAddSite] = useState(false)
   const [newSite, setNewSite] = useState({ name: "", url: "", description: "", tags: "" })
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  )
+  const { setNodeRef: setDroppableRef, isOver } = useDroppable({ id: `category:${category.id}` })
+
+  useEffect(() => {
+    setSites(initialSites)
+  }, [initialSites])
 
   if (sites.length === 0 && !editMode) return null
-
-  async function handleDragEnd(event: DragEndEvent) {
-    const { active, over } = event
-    if (!over || active.id === over.id) return
-
-    const oldIndex = sites.findIndex((s) => s.id === active.id)
-    const newIndex = sites.findIndex((s) => s.id === over.id)
-    const newOrder = arrayMove(sites, oldIndex, newIndex)
-    setSites(newOrder)
-    onSitesChange?.(newOrder)
-
-    try {
-      await fetch("/api/sites/reorder", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderedIds: newOrder.map((s) => s.id) }),
-      })
-      toast.success("排序已保存")
-    } catch {
-      toast.error("排序保存失败")
-    }
-  }
 
   async function handleSaveEdit() {
     try {
@@ -356,9 +325,15 @@ export function CategorySection({ category, sites: initialSites, categoryIndex =
         )}
       </div>
 
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-        <SortableContext items={sites.map((s) => s.id)} strategy={verticalListSortingStrategy}>
-          <div className={`grid ${gridCols[cardSize]} ${gapMap[layoutDensity]}`}>
+      <SortableContext items={sites.map((s) => `site:${s.id}`)} strategy={rectSortingStrategy}>
+          <div
+            ref={setDroppableRef}
+            onDrop={onDropSite ? (e) => onDropSite(e, category.id) : undefined}
+            onDragOver={onDragOverSite}
+            className={`grid rounded-[1.75rem] p-2 transition-all duration-200 ${gridCols[cardSize]} ${gapMap[layoutDensity]} ${
+              editMode && isOver ? "bg-primary/6 ring-1 ring-primary/20" : ""
+            }`}
+          >
             <AnimatePresence mode="popLayout">
               {sites.map((site, i) => (
                 <SortableSiteCard
@@ -368,14 +343,12 @@ export function CategorySection({ category, sites: initialSites, categoryIndex =
                   editMode={editMode}
                   onDelete={() => handleDeleteSite(site.id)}
                   onUpdate={(updates) => handleUpdateSite(site, updates)}
-                  allCategories={allCategories}
                   cardSize={cardSize}
                 />
               ))}
             </AnimatePresence>
           </div>
-        </SortableContext>
-      </DndContext>
+      </SortableContext>
 
       {editMode && sites.length === 0 && (
         <div className="py-8 text-center text-sm text-muted-foreground">

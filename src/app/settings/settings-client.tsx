@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { motion } from "motion/react"
-import { Mail, Key, Globe, Sparkles, Save, Loader2, Copy, Share2, ArrowLeft, Eye, EyeOff, Plus } from "lucide-react"
+import { Mail, Key, Globe, Sparkles, Save, Loader2, Copy, Share2, ArrowLeft, Eye, EyeOff, Plus, Download, Check, Zap } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -11,7 +11,7 @@ import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
 import Link from "next/link"
-import type { User, UserSettings, SearchEngine, AiSearchConfig } from "@/lib/types"
+import type { User, UserSettings, SearchEngine, AiSearchConfig, SharedCollection } from "@/lib/types"
 
 interface SettingsClientProps {
   user: User
@@ -33,6 +33,16 @@ export function SettingsClient({ user: initialUser }: SettingsClientProps) {
   const [loaded, setLoaded] = useState(false)
 
   const [newEngine, setNewEngine] = useState({ name: "", icon: "🔍", urlTemplate: "" })
+
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null)
+
+  const [importCode, setImportCode] = useState("")
+  const [importPreview, setImportPreview] = useState<SharedCollection | null>(null)
+  const [importSelectedCats, setImportSelectedCats] = useState<Set<string>>(new Set())
+  const [importLoading, setImportLoading] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [imported, setImported] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -185,6 +195,7 @@ export function SettingsClient({ user: initialUser }: SettingsClientProps) {
 
   async function handleSaveAiConfig() {
     setSaving(true)
+    setTestResult(null)
     try {
       const res = await fetch("/api/ai-config", {
         method: "PUT",
@@ -220,11 +231,101 @@ export function SettingsClient({ user: initialUser }: SettingsClientProps) {
     }
   }
 
+  async function handleTestAiConnection() {
+    if (!aiConfig) return
+    if (!aiConfig.apiKey || !aiConfig.apiUrl) {
+      setTestResult({ ok: false, message: "请先填写 API URL 和 API Key" })
+      return
+    }
+    setTesting(true)
+    setTestResult(null)
+    try {
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 15000)
+      const res = await fetch("/api/ai-search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: "hi", mode: "chat" }),
+        signal: controller.signal,
+      })
+      clearTimeout(timeout)
+      if (res.ok) {
+        setTestResult({ ok: true, message: `连接成功，模型: ${aiConfig.model || (aiConfig.provider === "anthropic" ? "claude-3-5-sonnet" : "gpt-4o-mini")}` })
+      } else {
+        const data = await res.json().catch(() => ({ error: "请求失败" }))
+        setTestResult({ ok: false, message: data.error || `请求失败 (${res.status})` })
+      }
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        setTestResult({ ok: false, message: "连接超时（15秒），请检查 API 地址" })
+      } else {
+        setTestResult({ ok: false, message: "网络连接失败" })
+      }
+    }
+    setTesting(false)
+  }
+
+  async function handlePreviewImport() {
+    if (!importCode.trim()) {
+      toast.error("请输入分享码")
+      return
+    }
+    setImportLoading(true)
+    setImportPreview(null)
+    setImported(false)
+    try {
+      const res = await fetch(`/api/share?code=${encodeURIComponent(importCode.trim())}`)
+      if (res.ok) {
+        const data = await res.json()
+        setImportPreview(data)
+        setImportSelectedCats(new Set(data.data.categories.map((c: { id: string }) => c.id)))
+      } else {
+        toast.error("分享码无效或不存在")
+      }
+    } catch {
+      toast.error("查询失败")
+    }
+    setImportLoading(false)
+  }
+
+  async function handleDoImport() {
+    if (!importPreview) return
+    setImporting(true)
+    try {
+      const res = await fetch("/api/share/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          shareCode: importPreview.shareCode,
+          selectedCategoryIds: Array.from(importSelectedCats),
+        }),
+      })
+      if (res.ok) {
+        setImported(true)
+        toast.success("导入成功！")
+      } else {
+        toast.error("导入失败")
+      }
+    } catch {
+      toast.error("导入失败")
+    }
+    setImporting(false)
+  }
+
+  function toggleImportCategory(id: string) {
+    setImportSelectedCats((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
   const tabs = [
     { id: "profile" as const, label: "个人资料", icon: Mail },
     { id: "search" as const, label: "搜索引擎", icon: Globe },
     { id: "ai" as const, label: "AI 搜索", icon: Sparkles },
-    { id: "share" as const, label: "分享", icon: Share2 },
+    { id: "share" as const, label: "导入/导出", icon: Share2 },
   ]
 
   if (!loaded) {
@@ -477,30 +578,128 @@ export function SettingsClient({ user: initialUser }: SettingsClientProps) {
                         <Label>提示词模板（可选，用 {"{query}"} 替代搜索词）</Label>
                         <Textarea value={aiConfig.promptTemplate} onChange={(e) => setAiConfig({ ...aiConfig, promptTemplate: e.target.value })} rows={3} />
                       </div>
-                      <Button onClick={handleSaveAiConfig} disabled={saving} className="gap-2">
-                        {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-                        保存
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button onClick={handleSaveAiConfig} disabled={saving} className="gap-2">
+                          {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+                          保存
+                        </Button>
+                        <Button onClick={handleTestAiConnection} disabled={testing} variant="outline" className="gap-2">
+                          {testing ? <Loader2 className="size-4 animate-spin" /> : <Zap className="size-4" />}
+                          测试连接
+                        </Button>
+                      </div>
+                      {testResult && (
+                        <div className={`rounded-lg border p-3 text-sm ${
+                          testResult.ok
+                            ? "border-green-500/30 bg-green-500/5 text-green-700 dark:text-green-400"
+                            : "border-destructive/30 bg-destructive/5 text-destructive"
+                        }`}>
+                          {testResult.ok ? "✅ " : "❌ "}{testResult.message}
+                        </div>
+                      )}
                     </>
                   )}
                 </div>
               )}
 
               {activeTab === "share" && (
-                <div className="rounded-xl border bg-card p-6 space-y-6">
-                  <h3 className="font-heading text-base font-semibold">分享收藏</h3>
-                  <p className="text-sm text-muted-foreground">
-                    生成分享链接，其他用户可以通过链接导入你的收藏网站。
-                  </p>
-                  <div className="flex items-center gap-3 rounded-lg bg-muted/50 p-4">
-                    <div className="flex-1">
-                      <div className="text-xs text-muted-foreground">你的分享码</div>
-                      <div className="text-sm font-mono font-medium">{user.shareCode}</div>
+                <div className="space-y-6">
+                  <div className="rounded-xl border bg-card p-6 space-y-4">
+                    <h3 className="font-heading text-base font-semibold">导出收藏</h3>
+                    <p className="text-sm text-muted-foreground">
+                      生成分享链接，其他用户可以通过链接导入你的收藏网站。
+                    </p>
+                    <div className="flex items-center gap-3 rounded-lg bg-muted/50 p-4">
+                      <div className="flex-1">
+                        <div className="text-xs text-muted-foreground">你的分享码</div>
+                        <div className="text-sm font-mono font-medium">{user.shareCode}</div>
+                      </div>
+                      <Button variant="outline" size="sm" className="gap-1.5" onClick={handleCopyShareCode}>
+                        <Copy className="size-3.5" />
+                        复制分享链接
+                      </Button>
                     </div>
-                    <Button variant="outline" size="sm" className="gap-1.5" onClick={handleCopyShareCode}>
-                      <Copy className="size-3.5" />
-                      复制分享链接
-                    </Button>
+                  </div>
+
+                  <div className="rounded-xl border bg-card p-6 space-y-4">
+                    <h3 className="font-heading text-base font-semibold">导入收藏</h3>
+                    <p className="text-sm text-muted-foreground">
+                      输入其他用户的分享码，预览并选择要导入的分类。
+                    </p>
+                    <div className="flex gap-2">
+                      <Input
+                        value={importCode}
+                        onChange={(e) => { setImportCode(e.target.value); setImportPreview(null); setImported(false) }}
+                        placeholder="输入分享码"
+                        onKeyDown={(e) => e.key === "Enter" && handlePreviewImport()}
+                      />
+                      <Button onClick={handlePreviewImport} disabled={importLoading} className="gap-1.5 shrink-0">
+                        {importLoading ? <Loader2 className="size-4 animate-spin" /> : <Eye className="size-4" />}
+                        预览
+                      </Button>
+                    </div>
+
+                    {importPreview && (
+                      <div className="space-y-3 pt-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">{importPreview.name}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {importPreview.data.categories.length} 个分类 · {importPreview.data.sites.length} 个网站
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">选择要导入的分类：</p>
+                        <div className="space-y-2">
+                          {importPreview.data.categories.map((cat) => {
+                            const catSites = importPreview.data.sites.filter((s) => s.categoryId === cat.id)
+                            const isSelected = importSelectedCats.has(cat.id)
+                            return (
+                              <button
+                                key={cat.id}
+                                onClick={() => toggleImportCategory(cat.id)}
+                                className={`w-full text-left rounded-lg border p-3 transition-all duration-200 ${
+                                  isSelected ? "border-primary/40 bg-primary/5" : "border-border bg-card hover:bg-accent/30"
+                                }`}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <div className={`size-4 rounded border flex items-center justify-center transition-colors ${
+                                    isSelected ? "bg-primary border-primary text-primary-foreground" : "border-border"
+                                  }`}>
+                                    {isSelected && <Check className="size-3" />}
+                                  </div>
+                                  <span>{cat.icon}</span>
+                                  <span className="text-sm font-medium">{cat.name}</span>
+                                  <span className="ml-auto text-xs text-muted-foreground">{catSites.length} 个网站</span>
+                                </div>
+                                {isSelected && catSites.length > 0 && (
+                                  <div className="mt-2 ml-6 flex flex-wrap gap-1.5">
+                                    {catSites.slice(0, 5).map((site) => (
+                                      <span key={site.id} className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-[11px]">
+                                        {site.name}
+                                      </span>
+                                    ))}
+                                    {catSites.length > 5 && (
+                                      <span className="text-[11px] text-muted-foreground">+{catSites.length - 5} 更多</span>
+                                    )}
+                                  </div>
+                                )}
+                              </button>
+                            )
+                          })}
+                        </div>
+
+                        {imported ? (
+                          <div className="flex items-center gap-2 rounded-lg bg-primary/10 p-3 text-sm text-primary">
+                            <Check className="size-4" />
+                            导入成功！<Link href="/" className="underline">返回首页查看</Link>
+                          </div>
+                        ) : (
+                          <Button onClick={handleDoImport} disabled={importing || importSelectedCats.size === 0} className="w-full gap-2">
+                            {importing ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+                            导入选中的 {importSelectedCats.size} 个分类
+                          </Button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
