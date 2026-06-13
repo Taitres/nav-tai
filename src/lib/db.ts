@@ -98,6 +98,8 @@ function migrate(db: Database.Database) {
       hero_title TEXT NOT NULL DEFAULT '发现优质网站',
       hero_subtitle TEXT NOT NULL DEFAULT '',
       default_engine_id TEXT,
+      theme TEXT NOT NULL DEFAULT 'default',
+      wallpaper TEXT NOT NULL DEFAULT '',
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
@@ -119,6 +121,18 @@ function migrate(db: Database.Database) {
   `)
 
   ensureAdminExists(db)
+  migrateV2(db)
+}
+
+function migrateV2(db: Database.Database) {
+  const cols = db.pragma("table_info(user_settings)") as Record<string, unknown>[]
+  const colNames = cols.map((c) => c.name as string)
+  if (!colNames.includes("theme")) {
+    db.exec("ALTER TABLE user_settings ADD COLUMN theme TEXT NOT NULL DEFAULT 'default'")
+  }
+  if (!colNames.includes("wallpaper")) {
+    db.exec("ALTER TABLE user_settings ADD COLUMN wallpaper TEXT NOT NULL DEFAULT ''")
+  }
 }
 
 function ensureAdminExists(db: Database.Database) {
@@ -252,6 +266,8 @@ function rowToSettings(row: Record<string, unknown>): UserSettings {
     heroTitle: row.hero_title as string,
     heroSubtitle: row.hero_subtitle as string,
     defaultEngineId: row.default_engine_id as string | null,
+    theme: (row.theme as string) || "default",
+    wallpaper: (row.wallpaper as string) || "",
   }
 }
 
@@ -535,6 +551,8 @@ export function updateSettings(userId: string, updates: Partial<UserSettings>): 
   if (updates.heroTitle !== undefined) { sets.push("hero_title = ?"); values.push(updates.heroTitle) }
   if (updates.heroSubtitle !== undefined) { sets.push("hero_subtitle = ?"); values.push(updates.heroSubtitle) }
   if (updates.defaultEngineId !== undefined) { sets.push("default_engine_id = ?"); values.push(updates.defaultEngineId) }
+  if (updates.theme !== undefined) { sets.push("theme = ?"); values.push(updates.theme) }
+  if (updates.wallpaper !== undefined) { sets.push("wallpaper = ?"); values.push(updates.wallpaper) }
   if (sets.length === 0) return getSettings(userId)
   values.push(userId)
   db.prepare(`UPDATE user_settings SET ${sets.join(", ")} WHERE user_id = ?`).run(...values)

@@ -89,17 +89,17 @@ export function SearchBar({ categories, sites, searchEngines, defaultEngineId }:
   }
 
   return (
-    <div ref={containerRef} className="relative w-full max-w-2xl mx-auto">
+    <div ref={containerRef} className="relative w-full max-w-xl mx-auto">
       <motion.div
         animate={{
           boxShadow: isOpen
-            ? "0 0 0 2px oklch(0.45 0.18 270 / 0.25), 0 8px 30px oklch(0.45 0.18 270 / 0.08)"
-            : "0 0 0 1px oklch(0 0 0 / 0.08), 0 2px 8px oklch(0 0 0 / 0.03)",
+            ? "0 0 0 1px oklch(0.45 0.18 270 / 0.3), 0 4px 16px oklch(0.45 0.18 270 / 0.06)"
+            : "0 0 0 1px oklch(0 0 0 / 0.06), 0 1px 2px oklch(0 0 0 / 0.04)",
         }}
-        transition={{ duration: 0.2 }}
-        className="relative overflow-hidden rounded-2xl border border-border/60 bg-card/80 backdrop-blur-xl shadow-sm shadow-black/5"
+        transition={{ type: "spring", stiffness: 400, damping: 30 }}
+        className="relative rounded-xl border border-border/40 bg-card/60 backdrop-blur-lg"
       >
-        <div className="flex items-center gap-2 px-4 py-3">
+        <div className="flex items-center gap-2 px-3 py-2">
           {selectedEngine ? (
             <button
               onClick={() => setShowEnginePicker(!showEnginePicker)}
@@ -122,16 +122,16 @@ export function SearchBar({ categories, sites, searchEngines, defaultEngineId }:
             onFocus={() => setIsOpen(true)}
             onKeyDown={handleKeyDown}
             placeholder={`使用 ${selectedEngine?.name || "搜索引擎"} 搜索...`}
-            className="border-0 bg-transparent p-0 text-base shadow-none focus-visible:ring-0 placeholder:text-muted-foreground/60"
+            className="border-0 bg-transparent p-0 text-sm shadow-none focus-visible:ring-0 placeholder:text-muted-foreground/50"
           />
 
           {query && (
             <button onClick={() => setQuery("")} className="shrink-0">
-              <X className="size-4 text-muted-foreground hover:text-foreground transition-colors" />
+              <X className="size-3.5 text-muted-foreground hover:text-foreground transition-colors" />
             </button>
           )}
 
-          <kbd className="pointer-events-none hidden h-5 items-center gap-1 rounded border bg-muted px-1.5 text-[10px] font-medium text-muted-foreground sm:flex">
+          <kbd className="pointer-events-none hidden h-5 items-center gap-0.5 rounded border bg-muted/60 px-1.5 text-[10px] font-medium text-muted-foreground/60 sm:flex">
             <Command className="size-2.5" />K
           </kbd>
         </div>
@@ -140,11 +140,11 @@ export function SearchBar({ categories, sites, searchEngines, defaultEngineId }:
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            initial={{ opacity: 0, y: -6, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -6, scale: 0.98 }}
-            transition={{ duration: 0.15, ease: [0.25, 0.46, 0.45, 0.94] }}
-            className="absolute inset-x-0 top-full z-50 mt-2 overflow-hidden rounded-2xl border border-border/70 bg-popover/95 backdrop-blur-xl shadow-2xl shadow-black/10"
+            initial={{ opacity: 0, y: -4, filter: "blur(4px)" }}
+            animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+            exit={{ opacity: 0, y: -2, filter: "blur(4px)" }}
+            transition={{ type: "spring", duration: 0.25, bounce: 0 }}
+            className="absolute inset-x-0 top-full z-50 mt-1.5 overflow-hidden rounded-xl border border-border/50 bg-popover/95 backdrop-blur-xl shadow-xl shadow-black/8"
           >
             {showEnginePicker && (
               <div className="border-b p-3">

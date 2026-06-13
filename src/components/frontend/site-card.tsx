@@ -19,10 +19,10 @@ interface SiteCardProps {
   cardSize?: CardSize
 }
 
-const sizeConfig: Record<CardSize, { padding: string; iconSize: string; titleSize: string; descLines: number; showTags: boolean; showDesc: boolean }> = {
-  sm: { padding: "p-2.5", iconSize: "size-6", titleSize: "text-xs", descLines: 1, showTags: false, showDesc: true },
-  md: { padding: "p-4", iconSize: "size-8", titleSize: "text-sm", descLines: 2, showTags: true, showDesc: true },
-  lg: { padding: "p-5", iconSize: "size-10", titleSize: "text-base", descLines: 3, showTags: true, showDesc: true },
+const sizeConfig: Record<CardSize, { padding: string; iconSize: string; titleSize: string; descClass: string; showTags: boolean; showDesc: boolean }> = {
+  sm: { padding: "p-2.5", iconSize: "size-6", titleSize: "text-xs", descClass: "line-clamp-1", showTags: false, showDesc: true },
+  md: { padding: "p-4", iconSize: "size-8", titleSize: "text-sm", descClass: "line-clamp-2", showTags: true, showDesc: true },
+  lg: { padding: "p-5", iconSize: "size-10", titleSize: "text-base", descClass: "line-clamp-3", showTags: true, showDesc: true },
 }
 
 export function SiteCard({ site, index = 0, editMode, onDelete, onUpdate, cardSize = "md" }: SiteCardProps) {
@@ -63,8 +63,9 @@ export function SiteCard({ site, index = 0, editMode, onDelete, onUpdate, cardSi
     return (
       <motion.div
         layout
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
+        initial={{ opacity: 0, scale: 0.95, filter: "blur(4px)" }}
+        animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
+        transition={{ type: "spring", duration: 0.25, bounce: 0 }}
         className="relative flex flex-col gap-3 rounded-xl border-2 border-primary/30 bg-card p-4 shadow-lg shadow-primary/5"
       >
         <div className="flex flex-col gap-2.5">
@@ -93,15 +94,16 @@ export function SiteCard({ site, index = 0, editMode, onDelete, onUpdate, cardSi
       onClick={editMode ? (e) => e.preventDefault() : undefined}
       ref={cardRef}
       layout
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
+      initial={{ opacity: 0, y: 8, filter: "blur(4px)" }}
+      animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+      exit={{ opacity: 0, y: -6, filter: "blur(4px)", transition: { duration: 0.15 } }}
       transition={{
-        duration: 0.4,
-        delay: index * 0.04,
-        ease: [0.25, 0.46, 0.45, 0.94],
+        duration: 0.25,
+        delay: index * 0.03,
+        type: "spring",
+        bounce: 0,
       }}
-      whileHover={editMode ? { scale: 1.02, transition: { duration: 0.15 } } : { y: -4, transition: { duration: 0.2 } }}
+      whileHover={editMode ? { scale: 1.02, transition: { type: "spring", stiffness: 400, damping: 25 } } : { y: -3, transition: { type: "spring", stiffness: 400, damping: 25 } }}
       onHoverStart={() => setIsHovered(true)}
       onHoverEnd={() => setIsHovered(false)}
       onMouseMove={handleMouseMove}
@@ -121,16 +123,16 @@ export function SiteCard({ site, index = 0, editMode, onDelete, onUpdate, cardSi
       {editMode && (
         <div className="absolute -top-2 -right-2 z-10 flex items-center gap-0.5">
           <motion.button
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
+            whileHover={{ scale: 1.08 }}
+            whileTap={{ scale: 0.93 }}
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIsEditing(true) }}
             className="flex size-6 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md"
           >
             <Pencil className="size-3" />
           </motion.button>
           <motion.button
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
+            whileHover={{ scale: 1.08 }}
+            whileTap={{ scale: 0.93 }}
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete?.() }}
             className="flex size-6 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow-md"
           >
@@ -153,7 +155,7 @@ export function SiteCard({ site, index = 0, editMode, onDelete, onUpdate, cardSi
         </div>
       </div>
       {cfg.showDesc && site.description && (
-        <p className={`line-clamp-${cfg.descLines} text-xs text-muted-foreground leading-relaxed`}>
+        <p className={`${cfg.descClass} text-xs text-muted-foreground leading-relaxed`}>
           {site.description}
         </p>
       )}

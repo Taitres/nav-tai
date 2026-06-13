@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef, useCallback } from "react"
-import { motion, AnimatePresence } from "motion/react"
+import { motion } from "motion/react"
 import { Sparkles, X, AlertCircle, RefreshCw, ExternalLink, Plus, Search, Loader2 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -141,10 +141,10 @@ export function AiSitePanel({ aiConfig, categories, sites, onAddSite, onClose }:
 
   return (
     <motion.div
-      initial={{ opacity: 0, x: 24 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: 24 }}
-      transition={{ duration: 0.25, ease: [0.25, 0.46, 0.45, 0.94] }}
+      initial={{ opacity: 0, x: 16, filter: "blur(8px)" }}
+      animate={{ opacity: 1, x: 0, filter: "blur(0px)" }}
+      exit={{ opacity: 0, x: 16, filter: "blur(8px)" }}
+      transition={{ type: "spring", duration: 0.35, bounce: 0 }}
       className="fixed top-14 right-0 bottom-0 z-40 w-full max-w-md border-l border-border/60 bg-background/95 backdrop-blur-2xl shadow-2xl shadow-black/10 flex flex-col"
     >
       <div className="flex items-center justify-between border-b px-4 py-3">
@@ -237,9 +237,9 @@ export function AiSitePanel({ aiConfig, categories, sites, onAddSite, onClose }:
               return (
                 <motion.div
                   key={i}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.04 }}
+                  initial={{ opacity: 0, y: 6, filter: "blur(4px)" }}
+                  animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                  transition={{ type: "spring", duration: 0.25, bounce: 0, delay: i * 0.03 }}
                 >
                   <div
                     draggable={!isAdded && !isExisting}

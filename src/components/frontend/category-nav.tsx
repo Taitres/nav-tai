@@ -51,9 +51,9 @@ export function CategoryNav({ categories, editMode, onCategoriesChange }: Catego
   return (
     <div className="space-y-2">
       <motion.nav
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: 0.3 }}
+        initial={{ opacity: 0, y: 6, filter: "blur(4px)" }}
+        animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+        transition={{ type: "spring", duration: 0.3, bounce: 0, delay: 0.1 }}
         className="no-scrollbar flex gap-2 overflow-x-auto pb-2"
       >
         {categories.map((cat) => (
@@ -82,11 +82,10 @@ export function CategoryNav({ categories, editMode, onCategoriesChange }: Catego
       <AnimatePresence>
         {showAdd && editMode && (
           <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.2 }}
-            className="overflow-hidden"
+            initial={{ opacity: 0, y: -6, filter: "blur(4px)" }}
+            animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+            exit={{ opacity: 0, y: -6, filter: "blur(4px)" }}
+            transition={{ type: "spring", duration: 0.25, bounce: 0 }}
           >
             <div className="flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 p-3">
               <Input

@@ -45,16 +45,14 @@ function SortableSiteCard({ site, index, editMode, onDelete, onUpdate, cardSize 
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: `site:${site.id}` })
 
+  const dragStyle = isDragging
+    ? { transform: CSS.Transform.toString(transform), transition, opacity: 0.5, zIndex: 50 }
+    : { transform: CSS.Transform.toString(transform), transition: transition || "transform 200ms cubic-bezier(0.16, 1, 0.3, 1)" }
+
   return (
     <div
       ref={setNodeRef}
-      style={{
-        transform: CSS.Transform.toString(transform),
-        transition: transition || "transform 180ms cubic-bezier(0.16, 1, 0.3, 1)",
-        opacity: isDragging ? 0.72 : 1,
-        zIndex: isDragging ? 50 : undefined,
-      }}
-      className="will-change-transform"
+      style={dragStyle}
     >
       {editMode && (
         <div className="relative">
@@ -219,13 +217,14 @@ export function CategorySection({ category, sites: initialSites, categoryIndex =
 
   return (
     <motion.section
-      initial={{ opacity: 0, y: 30 }}
-      whileInView={{ opacity: 1, y: 0 }}
+      initial={{ opacity: 0, y: 10, filter: "blur(6px)" }}
+      whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
       viewport={{ once: true, margin: "-80px" }}
       transition={{
-        duration: 0.5,
-        delay: categoryIndex * 0.08,
-        ease: [0.25, 0.46, 0.45, 0.94],
+        type: "spring",
+        duration: 0.3,
+        bounce: 0,
+        delay: categoryIndex * 0.05,
       }}
       className="scroll-mt-20"
       id={category.slug}
@@ -330,8 +329,8 @@ export function CategorySection({ category, sites: initialSites, categoryIndex =
             ref={setDroppableRef}
             onDrop={onDropSite ? (e) => onDropSite(e, category.id) : undefined}
             onDragOver={onDragOverSite}
-            className={`grid rounded-[1.75rem] p-2 transition-all duration-200 ${gridCols[cardSize]} ${gapMap[layoutDensity]} ${
-              editMode && isOver ? "bg-primary/6 ring-1 ring-primary/20" : ""
+            className={`grid rounded-[1.75rem] p-2 transition-all duration-300 ${gridCols[cardSize]} ${gapMap[layoutDensity]} ${
+              editMode && isOver ? "bg-primary/8 ring-2 ring-primary/25 shadow-[0_0_24px_-8px_var(--primary)]" : ""
             }`}
           >
             <AnimatePresence mode="popLayout">

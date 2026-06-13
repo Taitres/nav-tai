@@ -57,6 +57,8 @@ export interface UserSettings {
   heroTitle: string
   heroSubtitle: string
   defaultEngineId: string | null
+  theme: string
+  wallpaper: string
 }
 
 export interface SharedCollection {

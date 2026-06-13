@@ -29,7 +29,7 @@ export default async function Home() {
 
   navData = getAdminNavData()
   if (!navData) {
-    return <HomePage categories={[]} sites={[]} settings={{ siteName: "Nav-Tai", siteDescription: "", heroTitle: "发现优质网站", heroSubtitle: "", defaultEngineId: null }} searchEngines={[]} aiSearch={null} isOwner={false} />
+    return <HomePage categories={[]} sites={[]} settings={{ siteName: "Nav-Tai", siteDescription: "", heroTitle: "发现优质网站", heroSubtitle: "", defaultEngineId: null, theme: "default", wallpaper: "" }} searchEngines={[]} aiSearch={null} isOwner={false} />
   }
 
   return (

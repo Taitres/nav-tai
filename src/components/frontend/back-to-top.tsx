@@ -24,10 +24,10 @@ export function BackToTop() {
     <AnimatePresence>
       {show && (
         <motion.div
-          initial={{ opacity: 0, scale: 0.5, y: 20 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.5, y: 20 }}
-          transition={{ type: "spring", stiffness: 300, damping: 25 }}
+          initial={{ opacity: 0, scale: 0.9, y: 8, filter: "blur(4px)" }}
+          animate={{ opacity: 1, scale: 1, y: 0, filter: "blur(0px)" }}
+          exit={{ opacity: 0, y: 4, filter: "blur(4px)" }}
+          transition={{ type: "spring", stiffness: 400, damping: 25 }}
           className="fixed right-6 bottom-6 z-40"
         >
           <Button

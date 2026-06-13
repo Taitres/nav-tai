@@ -10,10 +10,12 @@ import { BackToTop } from "@/components/frontend/back-to-top"
 import { ThemeToggle } from "@/components/shared/theme-toggle"
 import { Logo } from "@/components/shared/logo"
 import { Button } from "@/components/ui/button"
-import { LogOut, Settings, Share2, Pencil, PencilOff, User, LayoutGrid, Rows3, GripVertical, Sparkles } from "lucide-react"
+import { LogOut, Settings, Share2, Pencil, PencilOff, User, LayoutGrid, Rows3, GripVertical, Sparkles, Palette, Check, ImageIcon } from "lucide-react"
 import Link from "next/link"
 import { motion, AnimatePresence } from "motion/react"
 import { toast } from "sonner"
+import { getThemePreset, themePresets, wallpaperPresets } from "@/lib/themes"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import {
   DndContext,
   closestCenter,
@@ -63,16 +65,15 @@ function SortableCategorySection({ category, sites, index, editMode, cardSize, l
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: `category:${category.id}` })
 
+  const dragStyle = isDragging
+    ? { transform: CSS.Transform.toString(transform), transition, opacity: 0.5, zIndex: 50 }
+    : { transform: CSS.Transform.toString(transform), transition: transition || "transform 200ms cubic-bezier(0.16, 1, 0.3, 1)" }
+
   return (
     <div
       ref={setNodeRef}
-      style={{
-        transform: CSS.Transform.toString(transform),
-        transition: transition || "transform 180ms cubic-bezier(0.16, 1, 0.3, 1)",
-        opacity: isDragging ? 0.72 : 1,
-        zIndex: isDragging ? 50 : undefined,
-      }}
-      className="relative will-change-transform"
+      style={dragStyle}
+      className="relative"
     >
       {editMode && (
         <button
@@ -109,6 +110,55 @@ export function HomePage({ categories: initialCategories, sites: initialSites, s
   const [mounted, setMounted] = useState(false)
   const [activeSiteId, setActiveSiteId] = useState<string | null>(null)
   const [showAiPanel, setShowAiPanel] = useState(false)
+  const [localTheme, setLocalTheme] = useState(settings.theme || "default")
+  const [localWallpaper, setLocalWallpaper] = useState(settings.wallpaper || "")
+
+  const themeStyle = useMemo(() => {
+    const preset = getThemePreset(localTheme || "default")
+    if (!preset || preset.id === "default") return undefined
+    return `
+:root {
+  --primary: ${preset.primary};
+  --primary-foreground: ${preset.primaryForeground};
+  --ring: ${preset.ring};
+  --accent: ${preset.accent};
+  --chart-1: ${preset.chart1};
+}
+.dark {
+  --primary: ${preset.darkPrimary};
+  --ring: ${preset.darkRing};
+  --accent: ${preset.darkAccent};
+  --chart-1: ${preset.darkChart1};
+}
+`
+  }, [localTheme])
+
+  const wallpaper = useMemo(() => {
+    const wpValue = localWallpaper || ""
+    if (!wpValue) return undefined
+    const found = wallpaperPresets.find((w) => w.id === wpValue)
+    return found ? found.value : wpValue
+  }, [localWallpaper])
+
+  async function persistAppearance(theme: string, wallpaper: string) {
+    try {
+      await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ theme, wallpaper }),
+      })
+    } catch { /* ignore */ }
+  }
+
+  function handleThemeChange(themeId: string) {
+    setLocalTheme(themeId)
+    persistAppearance(themeId, localWallpaper)
+  }
+
+  function handleWallpaperChange(wpId: string) {
+    setLocalWallpaper(wpId)
+    persistAppearance(localTheme, wpId)
+  }
 
   useEffect(() => {
     setMounted(true)
@@ -331,19 +381,28 @@ export function HomePage({ categories: initialCategories, sites: initialSites, s
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+    <div className="min-h-screen">
+      <div className="fixed inset-0 -z-10 bg-background" />
+      {themeStyle && <style dangerouslySetInnerHTML={{ __html: themeStyle }} />}
+      {wallpaper && (
+        <div
+          className="pointer-events-none fixed inset-0 -z-[5]"
+          style={{ background: wallpaper }}
+        />
+      )}
+      {wallpaper && <div className="pointer-events-none fixed inset-0 -z-[4] bg-background/50 backdrop-blur-[2px]" />}
+      {!wallpaper && <div className="pointer-events-none fixed inset-0 -z-[5] overflow-hidden">
         <div className="absolute inset-x-0 top-0 h-[32rem] bg-[radial-gradient(circle_at_top,_oklch(0.72_0.08_260_/_0.18),_transparent_58%)]" />
         <div className="absolute left-[-10rem] top-24 h-72 w-72 rounded-full bg-[oklch(0.78_0.07_210_/_0.12)] blur-3xl" />
         <div className="absolute right-[-8rem] top-40 h-80 w-80 rounded-full bg-[oklch(0.68_0.09_35_/_0.12)] blur-3xl" />
-      </div>
+      </div>}
       <header className="sticky top-0 z-40 border-b border-border/50 bg-background/70 backdrop-blur-2xl supports-[backdrop-filter]:bg-background/55">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
           <Logo />
           <div className="flex items-center gap-1.5">
             {isOwner && (
               <>
-                <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
                   <Button
                     variant={editMode ? "default" : "ghost"}
                     size="icon-sm"
@@ -356,7 +415,7 @@ export function HomePage({ categories: initialCategories, sites: initialSites, s
 
                 {editMode && (
                   <>
-                    <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                    <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
                       <Button
                         variant={showAiPanel ? "default" : "ghost"}
                         size="icon-sm"
@@ -426,10 +485,64 @@ export function HomePage({ categories: initialCategories, sites: initialSites, s
                         <Rows3 className="size-3.5" style={{ strokeWidth: 1.2 }} />
                       </button>
                     </div>
+
+                    <Popover>
+                      <PopoverTrigger
+                        render={<button className="flex items-center justify-center rounded-lg border border-border/70 bg-card/75 p-1.5 shadow-[0_12px_30px_-18px_rgba(0,0,0,0.55)] backdrop-blur-xl transition-colors hover:bg-accent" title="主题颜色" />}
+                      >
+                        <div className="size-4 rounded-full" style={{ backgroundColor: (getThemePreset(localTheme) || themePresets[0]).primary }} />
+                      </PopoverTrigger>
+                      <PopoverContent align="end" sideOffset={8} className="w-64 p-2">
+                        <div className="mb-2 text-xs font-medium text-muted-foreground">主题颜色</div>
+                        <div className="grid grid-cols-4 gap-1.5">
+                          {themePresets.map((t) => (
+                            <button
+                              key={t.id}
+                              onClick={() => handleThemeChange(t.id)}
+                              className={`relative flex items-center justify-center rounded-lg border py-2 transition-all ${
+                                localTheme === t.id ? "border-primary/40 bg-primary/5" : "border-border/50 hover:bg-accent/50"
+                              }`}
+                            >
+                              <div className="size-4 rounded-full" style={{ backgroundColor: t.primary }} />
+                              {localTheme === t.id && <Check className="absolute -top-0.5 -right-0.5 size-3 text-primary" />}
+                            </button>
+                          ))}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+
+                    <Popover>
+                      <PopoverTrigger
+                        render={<button className="flex items-center justify-center rounded-lg border border-border/70 bg-card/75 p-1.5 shadow-[0_12px_30px_-18px_rgba(0,0,0,0.55)] backdrop-blur-xl transition-colors hover:bg-accent" title="壁纸" />}
+                      >
+                        <ImageIcon className="size-4 text-muted-foreground" />
+                      </PopoverTrigger>
+                      <PopoverContent align="end" sideOffset={8} className="w-72 p-2">
+                        <div className="mb-2 text-xs font-medium text-muted-foreground">壁纸</div>
+                        <div className="grid grid-cols-4 gap-1.5">
+                          {wallpaperPresets.map((wp) => (
+                            <button
+                              key={wp.id}
+                              onClick={() => handleWallpaperChange(wp.id)}
+                              className={`relative flex flex-col items-center gap-1 rounded-lg border py-2 transition-all ${
+                                localWallpaper === wp.id ? "border-primary/40 bg-primary/5" : "border-border/50 hover:bg-accent/50"
+                              }`}
+                            >
+                              <div
+                                className="size-6 rounded border border-white/10"
+                                style={{ background: wp.value || "var(--background)" }}
+                              />
+                              <span className="text-[10px] text-muted-foreground">{wp.name}</span>
+                              {localWallpaper === wp.id && <Check className="absolute -top-0.5 -right-0.5 size-3 text-primary" />}
+                            </button>
+                          ))}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
                   </>
                 )}
 
-                <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
                   <Button variant="ghost" size="icon-sm" onClick={handleShare} title="分享">
                     <Share2 className="size-4" />
                   </Button>
@@ -451,7 +564,7 @@ export function HomePage({ categories: initialCategories, sites: initialSites, s
             )}
             <ThemeToggle />
             {isOwner && (
-              <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+              <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
                 <Button variant="ghost" size="icon-sm" onClick={handleLogout} title="退出登录">
                   <LogOut className="size-4" />
                 </Button>
@@ -467,7 +580,7 @@ export function HomePage({ categories: initialCategories, sites: initialSites, s
           subtitle={settings.heroSubtitle}
         />
 
-        <div className="mb-4 rounded-[2rem] border border-border/50 bg-card/45 p-3 shadow-[0_24px_80px_-40px_rgba(0,0,0,0.55)] backdrop-blur-xl sm:p-4">
+        <div className="relative z-20 mb-6">
           <SearchBar
             categories={categories}
             sites={sites}
@@ -517,9 +630,9 @@ export function HomePage({ categories: initialCategories, sites: initialSites, s
               </AnimatePresence>
             </div>
           </SortableContext>
-          <DragOverlay>
+          <DragOverlay dropAnimation={{ duration: 250, easing: "cubic-bezier(0.16, 1, 0.3, 1)" }}>
             {activeSite ? (
-              <div className="w-[280px] rounded-2xl border border-primary/20 bg-card/95 p-4 shadow-2xl shadow-black/15 backdrop-blur-xl">
+              <div className="w-[280px] rounded-2xl border border-primary/20 bg-card/95 p-4 shadow-2xl shadow-black/20 backdrop-blur-xl rotate-2 scale-[1.02]">
                 <div className="text-sm font-medium text-foreground">{activeSite.name}</div>
                 <div className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">{activeSite.description}</div>
               </div>
