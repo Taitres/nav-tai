@@ -1,8 +1,9 @@
 "use client"
 
 import { useState, useRef, useEffect, useMemo } from "react"
+import { createPortal } from "react-dom"
 import { motion, AnimatePresence } from "motion/react"
-import { Search, Command, Globe, ArrowRight, ChevronDown, X } from "lucide-react"
+import { Search, Command, ArrowRight, ChevronDown, X } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { FaviconImg } from "@/components/shared/favicon-img"
 import type { Site, Category, SearchEngine } from "@/lib/types"
@@ -20,6 +21,10 @@ export function SearchBar({ categories, sites, searchEngines, defaultEngineId }:
   const [showEnginePicker, setShowEnginePicker] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties | null>(null)
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => { setMounted(true) }, [])
 
   const enabledEngines = useMemo(() => searchEngines.filter((e) => e.enabled), [searchEngines])
   const defaultEngine = useMemo(() => {
@@ -77,6 +82,31 @@ export function SearchBar({ categories, sites, searchEngines, defaultEngineId }:
     document.addEventListener("mousedown", handleClickOutside)
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
+
+  useEffect(() => {
+    if (!isOpen) {
+      setDropdownStyle(null)
+      return
+    }
+    function updatePosition() {
+      if (!containerRef.current) return
+      const rect = containerRef.current.getBoundingClientRect()
+      setDropdownStyle({
+        position: "fixed",
+        left: rect.left,
+        top: rect.bottom + 6,
+        width: rect.width,
+        zIndex: 9999,
+      })
+    }
+    updatePosition()
+    window.addEventListener("resize", updatePosition)
+    window.addEventListener("scroll", updatePosition, true)
+    return () => {
+      window.removeEventListener("resize", updatePosition)
+      window.removeEventListener("scroll", updatePosition, true)
+    }
+  }, [isOpen])
 
   function handleEngineSearch() {
     if (!query.trim() || !selectedEngine) return
@@ -137,15 +167,17 @@ export function SearchBar({ categories, sites, searchEngines, defaultEngineId }:
         </div>
       </motion.div>
 
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: -4, filter: "blur(4px)" }}
-            animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-            exit={{ opacity: 0, y: -2, filter: "blur(4px)" }}
-            transition={{ type: "spring", duration: 0.25, bounce: 0 }}
-            className="absolute inset-x-0 top-full z-50 mt-1.5 overflow-hidden rounded-xl border border-border/50 bg-popover/95 backdrop-blur-xl shadow-xl shadow-black/8"
-          >
+      {mounted && createPortal(
+        <AnimatePresence>
+          {isOpen && dropdownStyle && (
+            <motion.div
+              initial={{ opacity: 0, y: -4, filter: "blur(4px)" }}
+              animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+              exit={{ opacity: 0, y: -2, filter: "blur(4px)" }}
+              transition={{ type: "spring", duration: 0.25, bounce: 0 }}
+              style={dropdownStyle}
+              className="overflow-hidden rounded-xl border border-border/50 bg-popover/95 backdrop-blur-xl shadow-xl shadow-black/8"
+            >
             {showEnginePicker && (
               <div className="border-b p-3">
                 <div className="mb-2 text-xs font-medium text-muted-foreground">选择搜索引擎</div>
@@ -213,8 +245,10 @@ export function SearchBar({ categories, sites, searchEngines, defaultEngineId }:
               </div>
             )}
           </motion.div>
-        )}
-      </AnimatePresence>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
     </div>
   )
 }

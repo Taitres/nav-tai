@@ -10,7 +10,7 @@ import { BackToTop } from "@/components/frontend/back-to-top"
 import { ThemeToggle } from "@/components/shared/theme-toggle"
 import { Logo } from "@/components/shared/logo"
 import { Button } from "@/components/ui/button"
-import { LogOut, Settings, Share2, Pencil, PencilOff, User, LayoutGrid, Rows3, GripVertical, Sparkles, Palette, Check, ImageIcon } from "lucide-react"
+import { LogOut, Settings, Share2, Pencil, PencilOff, User, LayoutGrid, Rows3, GripVertical, Sparkles, Check, ImageIcon, Download, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { motion, AnimatePresence } from "motion/react"
 import { toast } from "sonner"
@@ -48,6 +48,7 @@ interface HomePageProps {
   aiSearch: AiSearchConfig | null
   isOwner: boolean
   user?: { id: string; name: string; role: string; shareCode: string }
+  shareCode?: string | null
 }
 
 function SortableCategorySection({ category, sites, index, editMode, cardSize, layoutDensity, onCategoryChange, onCategoryDelete, onSitesChange, onDropSite, onDragOverSite }: {
@@ -101,7 +102,7 @@ function SortableCategorySection({ category, sites, index, editMode, cardSize, l
   )
 }
 
-export function HomePage({ categories: initialCategories, sites: initialSites, settings, searchEngines, aiSearch, isOwner, user }: HomePageProps) {
+export function HomePage({ categories: initialCategories, sites: initialSites, settings, searchEngines, aiSearch, isOwner, user, shareCode }: HomePageProps) {
   const [editMode, setEditMode] = useState(false)
   const [categories, setCategories] = useState(initialCategories)
   const [sites, setSites] = useState(initialSites)
@@ -112,6 +113,21 @@ export function HomePage({ categories: initialCategories, sites: initialSites, s
   const [showAiPanel, setShowAiPanel] = useState(false)
   const [localTheme, setLocalTheme] = useState(settings.theme || "default")
   const [localWallpaper, setLocalWallpaper] = useState(settings.wallpaper || "")
+  const [shareDialogOpen, setShareDialogOpen] = useState(!!shareCode)
+  const [sharePreview, setSharePreview] = useState<{ name: string; categories: { id: string; name: string; icon: string }[]; sites: { id: string; categoryId: string; name: string }[] } | null>(null)
+  const [shareLoading, setShareLoading] = useState(false)
+  const [shareImporting, setShareImporting] = useState(false)
+  const [shareImported, setShareImported] = useState(false)
+
+  const sitesByCategory = useMemo(() => {
+    const map = new Map<string, Site[]>()
+    for (const site of sites) {
+      const arr = map.get(site.categoryId)
+      if (arr) arr.push(site)
+      else map.set(site.categoryId, [site])
+    }
+    return map
+  }, [sites])
 
   const themeStyle = useMemo(() => {
     const preset = getThemePreset(localTheme || "default")
@@ -158,6 +174,42 @@ export function HomePage({ categories: initialCategories, sites: initialSites, s
   function handleWallpaperChange(wpId: string) {
     setLocalWallpaper(wpId)
     persistAppearance(localTheme, wpId)
+  }
+
+  useEffect(() => {
+    if (!shareCode) return
+    setShareLoading(true)
+    fetch(`/api/share?code=${encodeURIComponent(shareCode)}`)
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        if (data?.data) {
+          setSharePreview({ name: data.name, categories: data.data.categories, sites: data.data.sites })
+        }
+      })
+      .catch(() => {})
+      .finally(() => setShareLoading(false))
+  }, [shareCode])
+
+  async function handleShareImport() {
+    if (!shareCode) return
+    setShareImporting(true)
+    try {
+      const res = await fetch("/api/share/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ shareCode }),
+      })
+      if (res.ok) {
+        setShareImported(true)
+        toast.success("导入成功！刷新后可见")
+        setTimeout(() => window.location.reload(), 1500)
+      } else {
+        toast.error("导入失败")
+      }
+    } catch {
+      toast.error("导入失败")
+    }
+    setShareImporting(false)
   }
 
   useEffect(() => {
@@ -313,7 +365,7 @@ export function HomePage({ categories: initialCategories, sites: initialSites, s
     if (!raw) return
     try {
       const rec = JSON.parse(raw) as { name: string; url: string; description: string }
-      const catSites = sites.filter((s) => s.categoryId === categoryId)
+      const catSites = sitesByCategory.get(categoryId) || []
       const res = await fetch("/api/sites", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -580,7 +632,7 @@ export function HomePage({ categories: initialCategories, sites: initialSites, s
           subtitle={settings.heroSubtitle}
         />
 
-        <div className="relative z-20 mb-6">
+        <div className="mb-6">
           <SearchBar
             categories={categories}
             sites={sites}
@@ -610,7 +662,7 @@ export function HomePage({ categories: initialCategories, sites: initialSites, s
                   <SortableCategorySection
                     key={cat.id}
                     category={cat}
-                    sites={sites.filter((s) => s.categoryId === cat.id)}
+                    sites={sitesByCategory.get(cat.id) || []}
                     index={i}
                     editMode={editMode && isOwner}
                     cardSize={cardSize}
@@ -650,6 +702,83 @@ export function HomePage({ categories: initialCategories, sites: initialSites, s
             onAddSite={(site) => setSites((prev) => [...prev, site])}
             onClose={() => setShowAiPanel(false)}
           />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {shareCode && shareDialogOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+            onClick={() => setShareDialogOpen(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ type: "spring", duration: 0.3, bounce: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="mx-4 w-full max-w-md rounded-2xl border bg-card p-6 shadow-2xl"
+            >
+              <h2 className="font-heading text-lg font-semibold">导入收藏</h2>
+              <p className="mt-1 text-sm text-muted-foreground">分享码: <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono">{shareCode}</code></p>
+
+              {shareLoading && (
+                <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">加载中...</div>
+              )}
+
+              {!shareLoading && sharePreview && (
+                <div className="mt-4 space-y-3">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-medium">{sharePreview.name}</span>
+                    <span className="text-muted-foreground">{sharePreview.categories.length} 分类 · {sharePreview.sites.length} 网站</span>
+                  </div>
+                  <div className="max-h-48 space-y-1.5 overflow-y-auto">
+                    {sharePreview.categories.map((cat) => {
+                      const count = sharePreview.sites.filter((s) => s.categoryId === cat.id).length
+                      return (
+                        <div key={cat.id} className="flex items-center gap-2 rounded-lg border p-2.5 text-sm">
+                          <span>{cat.icon}</span>
+                          <span className="font-medium">{cat.name}</span>
+                          <span className="ml-auto text-xs text-muted-foreground">{count} 网站</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  {shareImported ? (
+                    <div className="flex items-center gap-2 rounded-lg bg-primary/10 p-3 text-sm text-primary">
+                      <Check className="size-4" />
+                      导入成功！页面即将刷新
+                    </div>
+                  ) : isOwner ? (
+                    <Button onClick={handleShareImport} disabled={shareImporting} className="w-full gap-2">
+                      {shareImporting ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+                      导入全部收藏
+                    </Button>
+                  ) : (
+                    <Link href={`/login?share=${shareCode}`}>
+                      <Button className="w-full gap-2">
+                        <User className="size-4" />
+                        登录后导入
+                      </Button>
+                    </Link>
+                  )}
+                </div>
+              )}
+
+              {!shareLoading && !sharePreview && (
+                <div className="py-8 text-center text-sm text-muted-foreground">
+                  <p>分享码无效或不存在</p>
+                </div>
+              )}
+
+              <Button variant="ghost" size="sm" onClick={() => setShareDialogOpen(false)} className="mt-4 w-full">
+                关闭
+              </Button>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
 

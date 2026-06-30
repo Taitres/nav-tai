@@ -5,7 +5,9 @@ import { HomePage } from "./home-page"
 
 export const dynamic = "force-dynamic"
 
-export default async function Home() {
+export default async function Home({ searchParams }: { searchParams: Promise<{ share?: string }> }) {
+  const params = await searchParams
+  const shareCode = params.share || null
   const session = await verifySession()
   let navData
 
@@ -22,6 +24,7 @@ export default async function Home() {
           aiSearch={navData.aiSearch}
           user={{ id: user.id, name: user.name, role: user.role, shareCode: user.shareCode }}
           isOwner={true}
+          shareCode={shareCode}
         />
       )
     }
@@ -29,7 +32,7 @@ export default async function Home() {
 
   navData = getAdminNavData()
   if (!navData) {
-    return <HomePage categories={[]} sites={[]} settings={{ siteName: "Nav-Tai", siteDescription: "", heroTitle: "发现优质网站", heroSubtitle: "", defaultEngineId: null, theme: "default", wallpaper: "" }} searchEngines={[]} aiSearch={null} isOwner={false} />
+    return <HomePage categories={[]} sites={[]} settings={{ siteName: "Nav-Tai", siteDescription: "", heroTitle: "发现优质网站", heroSubtitle: "", defaultEngineId: null, theme: "default", wallpaper: "" }} searchEngines={[]} aiSearch={null} isOwner={false} shareCode={shareCode} />
   }
 
   return (
@@ -40,6 +43,7 @@ export default async function Home() {
       searchEngines={navData.searchEngines}
       aiSearch={navData.aiSearch}
       isOwner={false}
+      shareCode={shareCode}
     />
   )
 }

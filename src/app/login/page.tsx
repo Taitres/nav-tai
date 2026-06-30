@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { Suspense, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { motion } from "motion/react"
 import { Mail, Lock, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -10,12 +10,14 @@ import { Label } from "@/components/ui/label"
 import { Logo } from "@/components/shared/logo"
 import Link from "next/link"
 
-export default function LoginPage() {
+function LoginForm() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const shareParam = searchParams.get("share")
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -30,7 +32,7 @@ export default function LoginPage() {
       })
 
       if (res.ok) {
-        router.push("/")
+        router.push(shareParam ? `/?share=${shareParam}` : "/")
         router.refresh()
       } else {
         const data = await res.json()
@@ -127,5 +129,13 @@ export default function LoginPage() {
         </p>
       </motion.div>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
   )
 }

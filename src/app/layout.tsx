@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 import { ThemeProvider } from "next-themes"
+import { MotionConfig } from "motion/react"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { Toaster } from "sonner"
 import "./globals.css"
@@ -39,7 +40,9 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <TooltipProvider>
-            {children}
+            <MotionConfig reducedMotion="user">
+              {children}
+            </MotionConfig>
             <Toaster position="top-center" richColors />
           </TooltipProvider>
         </ThemeProvider>

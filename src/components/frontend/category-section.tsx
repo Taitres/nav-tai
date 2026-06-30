@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { motion, AnimatePresence } from "motion/react"
 import { Pencil, Trash2, Plus, Check, X as XIcon, GripVertical } from "lucide-react"
 import { SiteCard } from "./site-card"
@@ -89,8 +89,7 @@ const gapMap: Record<LayoutDensity, string> = {
   relaxed: "gap-4",
 }
 
-export function CategorySection({ category, sites: initialSites, categoryIndex = 0, editMode, cardSize = "md", layoutDensity = "normal", onCategoryChange, onCategoryDelete, onSitesChange, onDropSite, onDragOverSite }: CategorySectionProps) {
-  const [sites, setSites] = useState(initialSites)
+export function CategorySection({ category, sites, categoryIndex = 0, editMode, cardSize = "md", layoutDensity = "normal", onCategoryChange, onCategoryDelete, onSitesChange, onDropSite, onDragOverSite }: CategorySectionProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [editName, setEditName] = useState(category.name)
   const [editIcon, setEditIcon] = useState(category.icon)
@@ -99,10 +98,6 @@ export function CategorySection({ category, sites: initialSites, categoryIndex =
   const [newSite, setNewSite] = useState({ name: "", url: "", description: "", tags: "" })
 
   const { setNodeRef: setDroppableRef, isOver } = useDroppable({ id: `category:${category.id}` })
-
-  useEffect(() => {
-    setSites(initialSites)
-  }, [initialSites])
 
   if (sites.length === 0 && !editMode) return null
 
@@ -166,7 +161,6 @@ export function CategorySection({ category, sites: initialSites, categoryIndex =
       if (res.ok) {
         const saved = await res.json()
         const newSites = [...sites, saved]
-        setSites(newSites)
         onSitesChange?.(newSites)
         setNewSite({ name: "", url: "", description: "", tags: "" })
         setShowAddSite(false)
@@ -186,7 +180,6 @@ export function CategorySection({ category, sites: initialSites, categoryIndex =
       })
       if (res.ok) {
         const newSites = sites.filter((s) => s.id !== siteId)
-        setSites(newSites)
         onSitesChange?.(newSites)
         toast.success("网站已删除")
       }
@@ -205,7 +198,6 @@ export function CategorySection({ category, sites: initialSites, categoryIndex =
       if (res.ok) {
         const updated = await res.json()
         const newSites = sites.map((s) => s.id === updated.id ? updated : s)
-        setSites(newSites)
         onSitesChange?.(newSites)
         return updated
       }

@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useRef, useState, useCallback } from "react"
 import { motion } from "motion/react"
 import { ExternalLink, Pencil, Trash2, Check, X as XIcon } from "lucide-react"
 import { FaviconImg } from "@/components/shared/favicon-img"
@@ -27,8 +27,7 @@ const sizeConfig: Record<CardSize, { padding: string; iconSize: string; titleSiz
 
 export function SiteCard({ site, index = 0, editMode, onDelete, onUpdate, cardSize = "md" }: SiteCardProps) {
   const cardRef = useRef<HTMLAnchorElement>(null)
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 })
-  const [isHovered, setIsHovered] = useState(false)
+  const overlayRef = useRef<HTMLDivElement>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [editData, setEditData] = useState({
     name: site.name,
@@ -39,14 +38,13 @@ export function SiteCard({ site, index = 0, editMode, onDelete, onUpdate, cardSi
 
   const cfg = sizeConfig[cardSize]
 
-  function handleMouseMove(e: React.MouseEvent<HTMLAnchorElement>) {
-    if (!cardRef.current) return
+  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (!cardRef.current || !overlayRef.current) return
     const rect = cardRef.current.getBoundingClientRect()
-    setMousePos({
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
-    })
-  }
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
+    overlayRef.current.style.background = `radial-gradient(300px circle at ${x}px ${y}px, oklch(0.45 0.18 270 / 0.06), transparent 60%)`
+  }, [])
 
   async function handleSaveEdit() {
     const updates: Partial<Site> = {
@@ -104,20 +102,14 @@ export function SiteCard({ site, index = 0, editMode, onDelete, onUpdate, cardSi
         bounce: 0,
       }}
       whileHover={editMode ? { scale: 1.02, transition: { type: "spring", stiffness: 400, damping: 25 } } : { y: -3, transition: { type: "spring", stiffness: 400, damping: 25 } }}
-      onHoverStart={() => setIsHovered(true)}
-      onHoverEnd={() => setIsHovered(false)}
       onMouseMove={handleMouseMove}
       className={`group relative flex flex-col gap-2 rounded-xl border bg-card ${cfg.padding} transition-all duration-200 ${
         editMode ? "border-primary/20 cursor-default" : "border-border/50 hover:border-primary/30 cursor-pointer"
       }`}
     >
       <div
+        ref={overlayRef}
         className="pointer-events-none absolute inset-0 rounded-xl opacity-0 transition-opacity duration-300 group-hover:opacity-100"
-        style={{
-          background: isHovered
-            ? `radial-gradient(300px circle at ${mousePos.x}px ${mousePos.y}px, oklch(0.45 0.18 270 / 0.06), transparent 60%)`
-            : "none",
-        }}
       />
 
       {editMode && (
