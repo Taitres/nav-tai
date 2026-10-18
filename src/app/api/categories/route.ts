@@ -21,7 +21,8 @@ export async function PUT(request: NextRequest) {
   if (!session?.userId) return NextResponse.json({ error: "请先登录" }, { status: 401 })
   const body = await request.json()
   const { id, ...updates } = body
-  const category = updateCategory(id, updates)
+  if (!id) return NextResponse.json({ error: "缺少分类 ID" }, { status: 400 })
+  const category = updateCategory(id, session.userId, updates)
   if (!category) return NextResponse.json({ error: "未找到" }, { status: 404 })
   return NextResponse.json(category)
 }
@@ -31,12 +32,13 @@ export async function DELETE(request: NextRequest) {
   if (!session?.userId) return NextResponse.json({ error: "请先登录" }, { status: 401 })
   const body = await request.json()
   const { id } = body
+  if (!id) return NextResponse.json({ error: "缺少分类 ID" }, { status: 400 })
   const sites = getSites(session.userId)
   const hasSites = sites.some((s) => s.categoryId === id)
   if (hasSites) {
     return NextResponse.json({ error: "该分类下还有网站，请先删除或移动" }, { status: 400 })
   }
-  const ok = deleteCategory(id)
+  const ok = deleteCategory(id, session.userId)
   if (!ok) return NextResponse.json({ error: "未找到" }, { status: 404 })
   return NextResponse.json({ success: true })
 }

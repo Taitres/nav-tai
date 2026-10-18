@@ -1,7 +1,7 @@
 "use client"
 
 import { Suspense, useState } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useSearchParams } from "next/navigation"
 import { motion } from "motion/react"
 import { Mail, Lock, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -15,7 +15,6 @@ function LoginForm() {
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
-  const router = useRouter()
   const searchParams = useSearchParams()
   const shareParam = searchParams.get("share")
 
@@ -32,8 +31,9 @@ function LoginForm() {
       })
 
       if (res.ok) {
-        router.push(shareParam ? `/?share=${shareParam}` : "/")
-        router.refresh()
+        // 登录后必须用一次全新的服务端渲染：客户端路由缓存里可能还留着未登录时的首页，
+        // push + refresh 会先渲染旧内容再刷新一次，看起来就是"闪一下"。
+        window.location.replace(shareParam ? `/?share=${shareParam}` : "/")
       } else {
         const data = await res.json()
         setError(data.error || "登录失败")

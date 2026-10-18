@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
 import { motion } from "motion/react"
 import { Mail, Lock, User, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -17,7 +16,6 @@ export default function RegisterPage() {
   const [confirmPassword, setConfirmPassword] = useState("")
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
-  const router = useRouter()
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -42,8 +40,8 @@ export default function RegisterPage() {
       })
 
       if (res.ok) {
-        router.push("/")
-        router.refresh()
+        // 同登录：整页跳转，避免先渲染未登录状态再刷新导致的闪烁。
+        window.location.replace("/")
       } else {
         const data = await res.json()
         setError(data.error || "注册失败")

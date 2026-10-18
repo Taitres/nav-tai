@@ -51,6 +51,9 @@ export interface AiSearchConfig {
   promptTemplate: string
 }
 
+/** AI 配置的公开版本：API Key 只留在服务端，客户端仅知道是否已配置。 */
+export type PublicAiSearchConfig = Omit<AiSearchConfig, "apiKey"> & { hasApiKey: boolean }
+
 export interface UserSettings {
   siteName: string
   siteDescription: string

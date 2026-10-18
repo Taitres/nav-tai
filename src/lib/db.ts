@@ -12,21 +12,26 @@ let _db: Database.Database | null = null
 function getDb(): Database.Database {
   if (_db) return _db
   if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true })
-  _db = new Database(DB_FILE)
-  _db.pragma("journal_mode = WAL")
-  _db.pragma("foreign_keys = ON")
+  const db = new Database(DB_FILE)
+  db.pragma("journal_mode = WAL")
+  db.pragma("foreign_keys = ON")
   try {
-    migrate(_db)
+    migrate(db)
   } catch (err) {
-    console.error("[db] Migration failed, recreating DB:", err)
-    _db.close()
-    if (fs.existsSync(DB_FILE)) fs.unlinkSync(DB_FILE)
-    _db = new Database(DB_FILE)
-    _db.pragma("journal_mode = WAL")
-    _db.pragma("foreign_keys = ON")
-    migrate(_db)
+    // Never delete the database on a failed migration: that silently wipes user data.
+    // Surface the failure instead, and leave the connection closed so a later call retries.
+    console.error("[db] Migration failed:", err)
+    db.close()
+    throw err
   }
+  _db = db
   return _db
+}
+
+function isOwnedBy(table: "categories" | "sites" | "search_engines", id: string, userId: string): boolean {
+  const db = getDb()
+  const row = db.prepare(`SELECT 1 FROM ${table} WHERE id = ? AND user_id = ?`).get(id, userId)
+  return Boolean(row)
 }
 
 function migrate(db: Database.Database) {
@@ -151,9 +156,9 @@ function ensureAdminExists(db: Database.Database) {
     `).run(adminId, "admin@nav-tai.com", hash, "Admin", "admin", "", shareCode)
 
     db.prepare(`
-      INSERT INTO user_settings (user_id, site_name, site_description, hero_title, hero_subtitle)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(adminId, "Nav-Tai", "现代化导航站", "发现优质网站", "精心整理的互联网资源导航，助你高效工作与学习")
+      INSERT INTO user_settings (user_id, site_name, site_description, hero_title, hero_subtitle, default_engine_id)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(adminId, "Nav-Tai", "现代化导航站", "发现优质网站", "精心整理的互联网资源导航，助你高效工作与学习", "se-google")
 
     const cats = [
       { id: "cat-1", name: "AI 工具", slug: "ai-tools", icon: "🤖", description: "人工智能相关工具与服务", order: 1 },
@@ -198,11 +203,6 @@ function ensureAdminExists(db: Database.Database) {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `)
     engines.forEach((e) => insertEngine.run(e.id, adminId, e.name, e.icon, e.urlTemplate, e.isDefault, e.enabled, e.order))
-
-    db.prepare(`
-      INSERT INTO user_settings (user_id, default_engine_id)
-      VALUES (?, ?)
-    `).run(adminId, "se-google")
   })()
 }
 
@@ -285,7 +285,7 @@ export function getUserById(id: string): User | null {
 
 export function getUserByEmail(email: string): (User & { passwordHash: string }) | null {
   const db = getDb()
-  const row = db.prepare("SELECT *, password_hash FROM users WHERE email = ?").get(email) as Record<string, unknown> | undefined
+  const row = db.prepare("SELECT * FROM users WHERE email = ?").get(email) as Record<string, unknown> | undefined
   if (!row) return null
   return { ...rowToUser(row), passwordHash: row.password_hash as string }
 }
@@ -350,7 +350,7 @@ export function addCategory(data: Omit<Category, "id" | "createdAt">): Category 
   return getCategoryById(id)!
 }
 
-export function updateCategory(id: string, updates: Partial<Omit<Category, "id" | "userId" | "createdAt">>): Category | null {
+export function updateCategory(id: string, userId: string, updates: Partial<Omit<Category, "id" | "userId" | "createdAt">>): Category | null {
   const db = getDb()
   const sets: string[] = []
   const values: unknown[] = []
@@ -359,23 +359,24 @@ export function updateCategory(id: string, updates: Partial<Omit<Category, "id" 
   if (updates.icon !== undefined) { sets.push("icon = ?"); values.push(updates.icon) }
   if (updates.description !== undefined) { sets.push("description = ?"); values.push(updates.description) }
   if (updates.order !== undefined) { sets.push('"order" = ?'); values.push(updates.order) }
-  if (sets.length === 0) return getCategoryById(id)
-  values.push(id)
-  db.prepare(`UPDATE categories SET ${sets.join(", ")} WHERE id = ?`).run(...values)
+  if (sets.length === 0) return isOwnedBy("categories", id, userId) ? getCategoryById(id) : null
+  values.push(id, userId)
+  const result = db.prepare(`UPDATE categories SET ${sets.join(", ")} WHERE id = ? AND user_id = ?`).run(...values)
+  if (result.changes === 0) return null
   return getCategoryById(id)
 }
 
-export function deleteCategory(id: string): boolean {
+export function deleteCategory(id: string, userId: string): boolean {
   const db = getDb()
-  const result = db.prepare("DELETE FROM categories WHERE id = ?").run(id)
+  const result = db.prepare("DELETE FROM categories WHERE id = ? AND user_id = ?").run(id, userId)
   return result.changes > 0
 }
 
-export function reorderCategories(orderedIds: string[]): boolean {
+export function reorderCategories(userId: string, orderedIds: string[]): boolean {
   const db = getDb()
-  const stmt = db.prepare('UPDATE categories SET "order" = ? WHERE id = ?')
+  const stmt = db.prepare('UPDATE categories SET "order" = ? WHERE id = ? AND user_id = ?')
   db.transaction(() => {
-    orderedIds.forEach((id, index) => stmt.run(index, id))
+    orderedIds.forEach((id, index) => stmt.run(index, id, userId))
   })()
   return true
 }
@@ -409,34 +410,39 @@ export function addSite(data: Omit<Site, "id" | "createdAt">): Site {
   return getSiteById(id)!
 }
 
-export function updateSite(id: string, updates: Partial<Omit<Site, "id" | "userId" | "createdAt">>): Site | null {
+export function updateSite(id: string, userId: string, updates: Partial<Omit<Site, "id" | "userId" | "createdAt">>): Site | null {
   const db = getDb()
   const sets: string[] = []
   const values: unknown[] = []
-  if (updates.categoryId !== undefined) { sets.push("category_id = ?"); values.push(updates.categoryId) }
+  if (updates.categoryId !== undefined) {
+    // A site may only be moved into a category the same user owns.
+    if (!isOwnedBy("categories", updates.categoryId, userId)) return null
+    sets.push("category_id = ?"); values.push(updates.categoryId)
+  }
   if (updates.name !== undefined) { sets.push("name = ?"); values.push(updates.name) }
   if (updates.url !== undefined) { sets.push("url = ?"); values.push(updates.url) }
   if (updates.description !== undefined) { sets.push("description = ?"); values.push(updates.description) }
   if (updates.icon !== undefined) { sets.push("icon = ?"); values.push(updates.icon) }
   if (updates.order !== undefined) { sets.push('"order" = ?'); values.push(updates.order) }
   if (updates.tags !== undefined) { sets.push("tags = ?"); values.push(JSON.stringify(updates.tags)) }
-  if (sets.length === 0) return getSiteById(id)
-  values.push(id)
-  db.prepare(`UPDATE sites SET ${sets.join(", ")} WHERE id = ?`).run(...values)
+  if (sets.length === 0) return isOwnedBy("sites", id, userId) ? getSiteById(id) : null
+  values.push(id, userId)
+  const result = db.prepare(`UPDATE sites SET ${sets.join(", ")} WHERE id = ? AND user_id = ?`).run(...values)
+  if (result.changes === 0) return null
   return getSiteById(id)
 }
 
-export function deleteSite(id: string): boolean {
+export function deleteSite(id: string, userId: string): boolean {
   const db = getDb()
-  const result = db.prepare("DELETE FROM sites WHERE id = ?").run(id)
+  const result = db.prepare("DELETE FROM sites WHERE id = ? AND user_id = ?").run(id, userId)
   return result.changes > 0
 }
 
-export function reorderSites(orderedIds: string[]): boolean {
+export function reorderSites(userId: string, orderedIds: string[]): boolean {
   const db = getDb()
-  const stmt = db.prepare('UPDATE sites SET "order" = ? WHERE id = ?')
+  const stmt = db.prepare('UPDATE sites SET "order" = ? WHERE id = ? AND user_id = ?')
   db.transaction(() => {
-    orderedIds.forEach((id, index) => stmt.run(index, id))
+    orderedIds.forEach((id, index) => stmt.run(index, id, userId))
   })()
   return true
 }
@@ -464,8 +470,9 @@ export function addSearchEngine(data: Omit<SearchEngine, "id">): SearchEngine {
   return rowToSearchEngine(row)
 }
 
-export function updateSearchEngine(id: string, updates: Partial<Omit<SearchEngine, "id" | "userId">>): SearchEngine | null {
+export function updateSearchEngine(id: string, userId: string, updates: Partial<Omit<SearchEngine, "id" | "userId">>): SearchEngine | null {
   const db = getDb()
+  if (!isOwnedBy("search_engines", id, userId)) return null
   const sets: string[] = []
   const values: unknown[] = []
   if (updates.name !== undefined) { sets.push("name = ?"); values.push(updates.name) }
@@ -475,25 +482,22 @@ export function updateSearchEngine(id: string, updates: Partial<Omit<SearchEngin
   if (updates.enabled !== undefined) { sets.push("enabled = ?"); values.push(updates.enabled ? 1 : 0) }
   if (updates.order !== undefined) { sets.push('"order" = ?'); values.push(updates.order) }
   if (sets.length === 0) return null
-  values.push(id)
+  values.push(id, userId)
 
   db.transaction(() => {
     if (updates.isDefault) {
-      const engine = db.prepare("SELECT user_id FROM search_engines WHERE id = ?").get(id) as Record<string, unknown> | undefined
-      if (engine) {
-        db.prepare("UPDATE search_engines SET is_default = 0 WHERE user_id = ?").run(engine.user_id)
-      }
+      db.prepare("UPDATE search_engines SET is_default = 0 WHERE user_id = ?").run(userId)
     }
-    db.prepare(`UPDATE search_engines SET ${sets.join(", ")} WHERE id = ?`).run(...values)
+    db.prepare(`UPDATE search_engines SET ${sets.join(", ")} WHERE id = ? AND user_id = ?`).run(...values)
   })()
 
   const row = db.prepare("SELECT * FROM search_engines WHERE id = ?").get(id) as Record<string, unknown> | undefined
   return row ? rowToSearchEngine(row) : null
 }
 
-export function deleteSearchEngine(id: string): boolean {
+export function deleteSearchEngine(id: string, userId: string): boolean {
   const db = getDb()
-  const result = db.prepare("DELETE FROM search_engines WHERE id = ?").run(id)
+  const result = db.prepare("DELETE FROM search_engines WHERE id = ? AND user_id = ?").run(id, userId)
   return result.changes > 0
 }
 

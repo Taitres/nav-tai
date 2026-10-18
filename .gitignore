@@ -24,6 +24,10 @@
 .DS_Store
 *.pem
 
+# sqlite runtime files (the database itself is tracked in data/)
+data/*.db-shm
+data/*.db-wal
+
 # debug
 npm-debug.log*
 yarn-debug.log*

@@ -20,7 +20,7 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json()
-  const { query, mode } = body
+  const { query } = body
 
   if (!query) {
     return new Response(JSON.stringify({ error: "请提供搜索关键词" }), { status: 400, headers: { "Content-Type": "application/json" } })

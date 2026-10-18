@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { FaviconImg } from "@/components/shared/favicon-img"
 import { toast } from "sonner"
-import type { Site, Category, AiSearchConfig } from "@/lib/types"
+import type { Site, Category } from "@/lib/types"
 
 interface AiSiteRecommendation {
   name: string
@@ -16,14 +16,13 @@ interface AiSiteRecommendation {
 }
 
 interface AiSitePanelProps {
-  aiConfig: AiSearchConfig
   categories: Category[]
   sites: Site[]
   onAddSite: (site: Site) => void
   onClose: () => void
 }
 
-export function AiSitePanel({ aiConfig, categories, sites, onAddSite, onClose }: AiSitePanelProps) {
+export function AiSitePanel({ categories, sites, onAddSite, onClose }: AiSitePanelProps) {
   const [query, setQuery] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<{ message: string; details?: string } | null>(null)

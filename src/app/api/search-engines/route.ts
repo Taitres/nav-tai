@@ -21,7 +21,8 @@ export async function PUT(request: NextRequest) {
   if (!session?.userId) return NextResponse.json({ error: "请先登录" }, { status: 401 })
   const body = await request.json()
   const { id, ...updates } = body
-  const engine = updateSearchEngine(id, updates)
+  if (!id) return NextResponse.json({ error: "缺少搜索引擎 ID" }, { status: 400 })
+  const engine = updateSearchEngine(id, session.userId, updates)
   if (!engine) return NextResponse.json({ error: "未找到" }, { status: 404 })
   return NextResponse.json(engine)
 }
@@ -31,7 +32,8 @@ export async function DELETE(request: NextRequest) {
   if (!session?.userId) return NextResponse.json({ error: "请先登录" }, { status: 401 })
   const body = await request.json()
   const { id } = body
-  const ok = deleteSearchEngine(id)
+  if (!id) return NextResponse.json({ error: "缺少搜索引擎 ID" }, { status: 400 })
+  const ok = deleteSearchEngine(id, session.userId)
   if (!ok) return NextResponse.json({ error: "未找到" }, { status: 404 })
   return NextResponse.json({ success: true })
 }

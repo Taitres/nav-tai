@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react"
 import { HeroSection } from "@/components/frontend/hero-section"
 import { SearchBar } from "@/components/frontend/search-bar"
 import { CategoryNav } from "@/components/frontend/category-nav"
@@ -35,17 +35,62 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
-import type { Category, Site, UserSettings, SearchEngine, AiSearchConfig } from "@/lib/types"
+import type { Category, Site, UserSettings, SearchEngine, PublicAiSearchConfig } from "@/lib/types"
 
 type CardSize = "sm" | "md" | "lg"
 type LayoutDensity = "compact" | "normal" | "relaxed"
+
+const CARD_SIZE_KEY = "nav-tai-card-size"
+const LAYOUT_DENSITY_KEY = "nav-tai-layout-density"
+const VIEW_PREFS_EVENT = "nav-tai:view-prefs"
+
+function isCardSize(value: string | null): value is CardSize {
+  return value === "sm" || value === "md" || value === "lg"
+}
+
+function isLayoutDensity(value: string | null): value is LayoutDensity {
+  return value === "compact" || value === "normal" || value === "relaxed"
+}
+
+/** localStorage 是外部数据源，用 useSyncExternalStore 读取，避免在 effect 里 setState 造成级联渲染。 */
+function subscribeViewPrefs(onStoreChange: () => void) {
+  window.addEventListener(VIEW_PREFS_EVENT, onStoreChange)
+  window.addEventListener("storage", onStoreChange)
+  return () => {
+    window.removeEventListener(VIEW_PREFS_EVENT, onStoreChange)
+    window.removeEventListener("storage", onStoreChange)
+  }
+}
+
+function readCardSize(): CardSize {
+  const saved = window.localStorage.getItem(CARD_SIZE_KEY)
+  return isCardSize(saved) ? saved : "md"
+}
+
+function readLayoutDensity(): LayoutDensity {
+  const saved = window.localStorage.getItem(LAYOUT_DENSITY_KEY)
+  return isLayoutDensity(saved) ? saved : "normal"
+}
+
+function serverCardSize(): CardSize {
+  return "md"
+}
+
+function serverLayoutDensity(): LayoutDensity {
+  return "normal"
+}
+
+function writeViewPref(key: string, value: string) {
+  window.localStorage.setItem(key, value)
+  window.dispatchEvent(new Event(VIEW_PREFS_EVENT))
+}
 
 interface HomePageProps {
   categories: Category[]
   sites: Site[]
   settings: UserSettings
   searchEngines: SearchEngine[]
-  aiSearch: AiSearchConfig | null
+  aiSearch: PublicAiSearchConfig | null
   isOwner: boolean
   user?: { id: string; name: string; role: string; shareCode: string }
   shareCode?: string | null
@@ -106,16 +151,16 @@ export function HomePage({ categories: initialCategories, sites: initialSites, s
   const [editMode, setEditMode] = useState(false)
   const [categories, setCategories] = useState(initialCategories)
   const [sites, setSites] = useState(initialSites)
-  const [cardSize, setCardSizeState] = useState<CardSize>("md")
-  const [layoutDensity, setLayoutDensityState] = useState<LayoutDensity>("normal")
-  const [mounted, setMounted] = useState(false)
+  const cardSize = useSyncExternalStore(subscribeViewPrefs, readCardSize, serverCardSize)
+  const layoutDensity = useSyncExternalStore(subscribeViewPrefs, readLayoutDensity, serverLayoutDensity)
   const [activeSiteId, setActiveSiteId] = useState<string | null>(null)
   const [showAiPanel, setShowAiPanel] = useState(false)
   const [localTheme, setLocalTheme] = useState(settings.theme || "default")
   const [localWallpaper, setLocalWallpaper] = useState(settings.wallpaper || "")
   const [shareDialogOpen, setShareDialogOpen] = useState(!!shareCode)
   const [sharePreview, setSharePreview] = useState<{ name: string; categories: { id: string; name: string; icon: string }[]; sites: { id: string; categoryId: string; name: string }[] } | null>(null)
-  const [shareLoading, setShareLoading] = useState(false)
+  // shareCode 只会在首次渲染时传入，直接用它初始化加载态，无需在 effect 里再 setState。
+  const [shareLoading, setShareLoading] = useState(!!shareCode)
   const [shareImporting, setShareImporting] = useState(false)
   const [shareImported, setShareImported] = useState(false)
 
@@ -178,7 +223,6 @@ export function HomePage({ categories: initialCategories, sites: initialSites, s
 
   useEffect(() => {
     if (!shareCode) return
-    setShareLoading(true)
     fetch(`/api/share?code=${encodeURIComponent(shareCode)}`)
       .then((res) => res.ok ? res.json() : null)
       .then((data) => {
@@ -212,30 +256,12 @@ export function HomePage({ categories: initialCategories, sites: initialSites, s
     setShareImporting(false)
   }
 
-  useEffect(() => {
-    setMounted(true)
-    const savedCardSize = window.localStorage.getItem("nav-tai-card-size")
-    const savedDensity = window.localStorage.getItem("nav-tai-layout-density")
-    if (savedCardSize === "sm" || savedCardSize === "md" || savedCardSize === "lg") {
-      setCardSizeState(savedCardSize)
-    }
-    if (savedDensity === "compact" || savedDensity === "normal" || savedDensity === "relaxed") {
-      setLayoutDensityState(savedDensity)
-    }
-  }, [])
-
   function setCardSize(size: CardSize) {
-    setCardSizeState(size)
-    if (mounted) {
-      window.localStorage.setItem("nav-tai-card-size", size)
-    }
+    writeViewPref(CARD_SIZE_KEY, size)
   }
 
   function setLayoutDensity(density: LayoutDensity) {
-    setLayoutDensityState(density)
-    if (mounted) {
-      window.localStorage.setItem("nav-tai-layout-density", density)
-    }
+    writeViewPref(LAYOUT_DENSITY_KEY, density)
   }
 
   const categorySensors = useSensors(
@@ -696,7 +722,6 @@ export function HomePage({ categories: initialCategories, sites: initialSites, s
       <AnimatePresence>
         {showAiPanel && editMode && isOwner && aiSearch && (
           <AiSitePanel
-            aiConfig={aiSearch}
             categories={categories}
             sites={sites}
             onAddSite={(site) => setSites((prev) => [...prev, site])}

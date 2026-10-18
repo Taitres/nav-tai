@@ -7,6 +7,9 @@ export async function PUT(request: NextRequest) {
   if (!session?.userId) return NextResponse.json({ error: "请先登录" }, { status: 401 })
   const body = await request.json()
   const { orderedIds } = body
-  reorderSites(orderedIds)
+  if (!Array.isArray(orderedIds)) {
+    return NextResponse.json({ error: "orderedIds 必须是数组" }, { status: 400 })
+  }
+  reorderSites(session.userId, orderedIds)
   return NextResponse.json({ success: true })
 }

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useEffect, useMemo } from "react"
+import { useState, useRef, useEffect, useMemo, useCallback, useSyncExternalStore } from "react"
 import { createPortal } from "react-dom"
 import { motion, AnimatePresence } from "motion/react"
 import { Search, Command, ArrowRight, ChevronDown, X } from "lucide-react"
@@ -15,6 +15,11 @@ interface SearchBarProps {
   defaultEngineId: string | null
 }
 
+/** 客户端挂载标记：服务端与首次渲染为 false，避免 createPortal 造成的 hydration 不一致。 */
+function subscribeMounted() {
+  return () => {}
+}
+
 export function SearchBar({ categories, sites, searchEngines, defaultEngineId }: SearchBarProps) {
   const [query, setQuery] = useState("")
   const [isOpen, setIsOpen] = useState(false)
@@ -22,20 +27,15 @@ export function SearchBar({ categories, sites, searchEngines, defaultEngineId }:
   const inputRef = useRef<HTMLInputElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties | null>(null)
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => { setMounted(true) }, [])
+  const mounted = useSyncExternalStore(subscribeMounted, () => true, () => false)
 
   const enabledEngines = useMemo(() => searchEngines.filter((e) => e.enabled), [searchEngines])
   const defaultEngine = useMemo(() => {
     return enabledEngines.find((e) => e.id === defaultEngineId) || enabledEngines[0] || null
   }, [enabledEngines, defaultEngineId])
-  const [selectedEngineId, setSelectedEngineId] = useState<string | null>(defaultEngine?.id ?? null)
+  // null 表示"跟随默认引擎"，用户手动选择后才固定。
+  const [selectedEngineId, setSelectedEngineId] = useState<string | null>(null)
   const selectedEngine = enabledEngines.find((e) => e.id === selectedEngineId) || defaultEngine
-
-  useEffect(() => {
-    setSelectedEngineId(defaultEngine?.id ?? null)
-  }, [defaultEngine?.id])
 
   const localResults = useMemo(() => {
     if (!query.trim()) return []
@@ -55,12 +55,29 @@ export function SearchBar({ categories, sites, searchEngines, defaultEngineId }:
       }))
   }, [query, sites, categories])
 
+  const updateDropdownPosition = useCallback(() => {
+    const rect = containerRef.current?.getBoundingClientRect()
+    if (!rect) return
+    setDropdownStyle({
+      position: "fixed",
+      left: rect.left,
+      top: rect.bottom + 6,
+      width: rect.width,
+      zIndex: 9999,
+    })
+  }, [])
+
+  const openDropdown = useCallback(() => {
+    updateDropdownPosition()
+    setIsOpen(true)
+  }, [updateDropdownPosition])
+
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault()
         inputRef.current?.focus()
-        setIsOpen(true)
+        openDropdown()
       }
       if (e.key === "Escape") {
         setIsOpen(false)
@@ -70,7 +87,7 @@ export function SearchBar({ categories, sites, searchEngines, defaultEngineId }:
     }
     document.addEventListener("keydown", handleKeyDown)
     return () => document.removeEventListener("keydown", handleKeyDown)
-  }, [])
+  }, [openDropdown])
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -83,30 +100,16 @@ export function SearchBar({ categories, sites, searchEngines, defaultEngineId }:
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
 
+  // 下拉层挂在 body 上，滚动/缩放时需要跟随输入框重新定位。
   useEffect(() => {
-    if (!isOpen) {
-      setDropdownStyle(null)
-      return
-    }
-    function updatePosition() {
-      if (!containerRef.current) return
-      const rect = containerRef.current.getBoundingClientRect()
-      setDropdownStyle({
-        position: "fixed",
-        left: rect.left,
-        top: rect.bottom + 6,
-        width: rect.width,
-        zIndex: 9999,
-      })
-    }
-    updatePosition()
-    window.addEventListener("resize", updatePosition)
-    window.addEventListener("scroll", updatePosition, true)
+    if (!isOpen) return
+    window.addEventListener("resize", updateDropdownPosition)
+    window.addEventListener("scroll", updateDropdownPosition, true)
     return () => {
-      window.removeEventListener("resize", updatePosition)
-      window.removeEventListener("scroll", updatePosition, true)
+      window.removeEventListener("resize", updateDropdownPosition)
+      window.removeEventListener("scroll", updateDropdownPosition, true)
     }
-  }, [isOpen])
+  }, [isOpen, updateDropdownPosition])
 
   function handleEngineSearch() {
     if (!query.trim() || !selectedEngine) return
@@ -147,9 +150,9 @@ export function SearchBar({ categories, sites, searchEngines, defaultEngineId }:
             value={query}
             onChange={(e) => {
               setQuery(e.target.value)
-              setIsOpen(true)
+              openDropdown()
             }}
-            onFocus={() => setIsOpen(true)}
+            onFocus={openDropdown}
             onKeyDown={handleKeyDown}
             placeholder={`使用 ${selectedEngine?.name || "搜索引擎"} 搜索...`}
             className="border-0 bg-transparent p-0 text-sm shadow-none focus-visible:ring-0 placeholder:text-muted-foreground/50"
@@ -208,7 +211,7 @@ export function SearchBar({ categories, sites, searchEngines, defaultEngineId }:
                 >
                   <span className="inline-flex items-center gap-2">
                     <span>{selectedEngine.icon}</span>
-                    使用 {selectedEngine.name} 搜索 "{query}"
+                    使用 {selectedEngine.name} 搜索 “{query}”
                   </span>
                   <ArrowRight className="size-3.5" />
                 </button>
